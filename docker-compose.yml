@@ -1,0 +1,50 @@
+version: '3'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - ~/.ssh:/root/.ssh:ro
+      - ./ansible:/etc/ansible
+    networks:
+      ansible_net:
+        ipv4_address: 172.20.0.2
+    depends_on:
+      - ansible
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    networks:
+      ansible_net:
+        ipv4_address: 172.20.0.3
+    depends_on:
+      - backend
+
+  ansible:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ./ansible:/etc/ansible
+      - ~/.ssh:/root/.ssh:ro
+    networks:
+      ansible_net:
+        ipv4_address: 172.20.0.4
+    tty: true
+
+networks:
+  ansible_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1

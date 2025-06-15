@@ -1,0 +1,43 @@
+version: '3'
+
+services:
+  backend:
+    image: registry.cn-hangzhou.aliyuncs.com/ansible-dashboard/backend:latest
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - ~/.ssh:/root/.ssh:ro
+    networks:
+      ansible_net:
+        ipv4_address: 172.20.0.2
+    depends_on:
+      - ansible
+
+  frontend:
+    image: registry.cn-hangzhou.aliyuncs.com/ansible-dashboard/frontend:latest
+    ports:
+      - "80:80"
+    networks:
+      ansible_net:
+        ipv4_address: 172.20.0.3
+    depends_on:
+      - backend
+
+  ansible:
+    image: registry.cn-hangzhou.aliyuncs.com/ansible-dashboard/ansible:latest
+    volumes:
+      - ./ansible:/etc/ansible
+      - ~/.ssh:/root/.ssh:ro
+    networks:
+      ansible_net:
+        ipv4_address: 172.20.0.4
+    tty: true
+
+networks:
+  ansible_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1 

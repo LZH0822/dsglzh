@@ -1,0 +1,82 @@
+---
+# 主机资源监控 Playbook
+- name: 收集主机资源信息
+  hosts: all
+  gather_facts: yes
+  tasks:
+    - name: 获取系统基本信息
+      setup:
+        gather_subset:
+          - hardware
+          - network
+          - virtual
+      register: system_facts
+
+    - name: 获取内存使用情况
+      shell: free -m | grep Mem | awk '{print $3"/"$2}'
+      register: memory_usage
+      changed_when: false
+
+    - name: 获取 CPU 使用率
+      shell: top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}'
+      register: cpu_usage
+      changed_when: false
+
+    - name: 获取磁盘使用情况
+      shell: df -h / | tail -n 1 | awk '{print $5}'
+      register: disk_usage
+      changed_when: false
+
+    - name: 获取网络连接数
+      shell: netstat -an | grep ESTABLISHED | wc -l
+      register: network_connections
+      changed_when: false
+      ignore_errors: yes
+
+    - name: 获取进程数
+      shell: ps aux | wc -l
+      register: process_count
+      changed_when: false
+
+    - name: 获取系统负载
+      shell: uptime | awk -F'[a-z]:' '{ print $2}'
+      register: system_load
+      changed_when: false
+
+    - name: 获取最近登录用户
+      shell: last | head -n 5
+      register: recent_logins
+      changed_when: false
+
+    - name: 创建资源报告
+      set_fact:
+        resource_report:
+          hostname: "{{ ansible_hostname }}"
+          os: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+          kernel: "{{ ansible_kernel }}"
+          cpu:
+            model: "{{ ansible_processor[2] | default('Unknown') }}"
+            cores: "{{ ansible_processor_cores | default(1) }}"
+            count: "{{ ansible_processor_count | default(1) }}"
+            usage_percent: "{{ cpu_usage.stdout | float | round(2) }}"
+          memory:
+            total_mb: "{{ ansible_memtotal_mb | int }}"
+            usage: "{{ memory_usage.stdout }}"
+          disk:
+            total_gb: "{{ (ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | first / 1024 / 1024 / 1024) | round(2) }}"
+            usage_percent: "{{ disk_usage.stdout }}"
+          network:
+            interfaces: "{{ ansible_interfaces | reject('equalto', 'lo') | list }}"
+            ip_addresses: "{{ ansible_all_ipv4_addresses }}"
+            connections: "{{ network_connections.stdout | int }}"
+          system:
+            uptime_seconds: "{{ ansible_uptime_seconds | int }}"
+            uptime_days: "{{ (ansible_uptime_seconds / 86400) | int }}"
+            load: "{{ system_load.stdout | trim }}"
+            processes: "{{ process_count.stdout | int }}"
+          users:
+            recent_logins: "{{ recent_logins.stdout_lines }}"
+
+    - name: 显示资源报告
+      debug:
+        var: resource_report 

@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ansible Dashboard</title>
+    <link href="bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .dashboard-header {
+            background-color: #343a40;
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-header {
+            border-radius: 10px 10px 0 0 !important;
+            font-weight: bold;
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+        }
+
+        .host-card {
+            height: 100%;
+        }
+
+        .host-card .card-body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .host-card .card-footer {
+            margin-top: auto;
+        }
+
+        .chart-container {
+            height: 300px;
+        }
+
+        .system-info-item {
+            margin-bottom: 10px;
+        }
+
+        .system-info-label {
+            font-weight: bold;
+            margin-right: 5px;
+        }
+
+        .modal-header {
+            background-color: #343a40;
+            color: white;
+        }
+
+        .btn-circle {
+            width: 30px;
+            height: 30px;
+            padding: 6px 0;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 12px;
+            line-height: 1.428571429;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loading-spinner {
+            width: 3rem;
+            height: 3rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner-border text-light loading-spinner" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <header class="dashboard-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="bi bi-display"></i> Ansible Dashboard</h1>
+                <div>
+                    <button id="refresh-btn" class="btn btn-outline-light me-2">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                    <button id="add-host-btn" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Add Host
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mb-5">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-info-circle"></i> System Status
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3">
+                            <div>
+                                <h5>Total Hosts</h5>
+                                <h2 id="total-hosts">0</h2>
+                            </div>
+                            <div>
+                                <h5>Online Hosts</h5>
+                                <h2 id="online-hosts">0</h2>
+                            </div>
+                            <div>
+                                <h5>Offline Hosts</h5>
+                                <h2 id="offline-hosts">0</h2>
+                            </div>
+                        </div>
+                        <div class="progress" style="height: 25px;">
+                            <div id="online-progress" class="progress-bar bg-success" role="progressbar"
+                                style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                            <div id="offline-progress" class="progress-bar bg-danger" role="progressbar"
+                                style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <i class="bi bi-graph-up"></i> Resource Usage
+                    </div>
+                    <div class="card-body">
+                        <canvas id="resource-chart" class="chart-container"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-hdd-network"></i> Host Status
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Hostname</th>
+                                        <th>IP Address</th>
+                                        <th>Status</th>
+                                        <th>OS</th>
+                                        <th>CPU Cores</th>
+                                        <th>Memory (MB)</th>
+                                        <th>Disk (GB)</th>
+                                        <th>Uptime (Hours)</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="hosts-table-body">
+                                    <!-- Host data will be inserted here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row" id="host-cards-container">
+            <!-- Host cards will be inserted here -->
+        </div>
+    </main>
+
+    <!-- Add Host Modal -->
+    <div class="modal fade" id="add-host-modal" tabindex="-1" aria-labelledby="add-host-modal-label" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="add-host-modal-label">Add New Host</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="add-host-form">
+                        <div class="mb-3">
+                            <label for="hostname" class="form-label">Hostname</label>
+                            <input type="text" class="form-control" id="hostname" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="ip" class="form-label">IP Address</label>
+                            <input type="text" class="form-control" id="ip" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="username" value="root">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-host-btn">Save Host</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Host Modal -->
+    <div class="modal fade" id="edit-host-modal" tabindex="-1" aria-labelledby="edit-host-modal-label"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title" id="edit-host-modal-label">Edit Host</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="edit-host-form">
+                        <input type="hidden" id="edit-host-original-ip">
+                        <div class="mb-3">
+                            <label for="edit-hostname" class="form-label">Hostname</label>
+                            <input type="text" class="form-control" id="edit-hostname" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-ip" class="form-label">IP Address</label>
+                            <input type="text" class="form-control" id="edit-ip" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit-username" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="edit-username" value="root">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-warning" id="update-host-btn">Update Host</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="bootstrap.bundle.min.js"></script>
+    <script src="chart.js"></script>
+    <script>
+        // DOM Elements
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const addHostBtn = document.getElementById('add-host-btn');
+        const saveHostBtn = document.getElementById('save-host-btn');
+        const updateHostBtn = document.getElementById('update-host-btn');
+        const hostsTableBody = document.getElementById('hosts-table-body');
+        const hostCardsContainer = document.getElementById('host-cards-container');
+        const totalHostsEl = document.getElementById('total-hosts');
+        const onlineHostsEl = document.getElementById('online-hosts');
+        const offlineHostsEl = document.getElementById('offline-hosts');
+        const onlineProgressEl = document.getElementById('online-progress');
+        const offlineProgressEl = document.getElementById('offline-progress');
+
+        // Bootstrap Modals
+        const addHostModal = new bootstrap.Modal(document.getElementById('add-host-modal'));
+        const editHostModal = new bootstrap.Modal(document.getElementById('edit-host-modal'));
+
+        // Chart.js
+        let resourceChart;
+
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeResourceChart();
+            loadDashboardData();
+
+            // Event listeners
+            refreshBtn.addEventListener('click', loadDashboardData);
+            addHostBtn.addEventListener('click', () => addHostModal.show());
+            saveHostBtn.addEventListener('click', addHost);
+            updateHostBtn.addEventListener('click', updateHost);
+        });
+
+        // Initialize resource chart
+        function initializeResourceChart() {
+            const ctx = document.getElementById('resource-chart').getContext('2d');
+            resourceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'CPU Cores',
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                            borderColor: 'rgb(54, 162, 235)',
+                            borderWidth: 1,
+                            data: []
+                        },
+                        {
+                            label: 'Memory (GB)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                            borderColor: 'rgb(255, 99, 132)',
+                            borderWidth: 1,
+                            data: []
+                        },
+                        {
+                            label: 'Disk (TB)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                            borderColor: 'rgb(75, 192, 192)',
+                            borderWidth: 1,
+                            data: []
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            showLoading();
+            try {
+                // Get system info
+                const systemInfoResponse = await fetch('/api/system-info');
+                const systemInfoData = await systemInfoResponse.json();
+
+                if (systemInfoData.success) {
+                    updateSystemInfo(systemInfoData.hosts);
+                    updateHostsTable(systemInfoData.hosts);
+                    updateHostCards(systemInfoData.hosts);
+                    updateResourceChart(systemInfoData.hosts);
+                } else {
+                    console.error('Failed to load system info:', systemInfoData.error);
+                    alert('Failed to load system information. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                alert('An error occurred while loading dashboard data. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Update system info summary
+        function updateSystemInfo(hosts) {
+            const totalHosts = hosts.length;
+            const onlineHosts = hosts.filter(host => host.status === 'online').length;
+            const offlineHosts = totalHosts - onlineHosts;
+
+            totalHostsEl.textContent = totalHosts;
+            onlineHostsEl.textContent = onlineHosts;
+            offlineHostsEl.textContent = offlineHosts;
+
+            const onlinePercentage = totalHosts > 0 ? Math.round((onlineHosts / totalHosts) * 100) : 0;
+            const offlinePercentage = totalHosts > 0 ? Math.round((offlineHosts / totalHosts) * 100) : 0;
+
+            onlineProgressEl.style.width = `${onlinePercentage}%`;
+            onlineProgressEl.textContent = `${onlinePercentage}%`;
+            onlineProgressEl.setAttribute('aria-valuenow', onlinePercentage);
+
+            offlineProgressEl.style.width = `${offlinePercentage}%`;
+            offlineProgressEl.textContent = `${offlinePercentage}%`;
+            offlineProgressEl.setAttribute('aria-valuenow', offlinePercentage);
+        }
+
+        // Update hosts table
+        function updateHostsTable(hosts) {
+            hostsTableBody.innerHTML = '';
+
+            hosts.forEach(host => {
+                const tr = document.createElement('tr');
+
+                const statusClass = host.status === 'online' ? 'success' : 'danger';
+                const statusText = host.status === 'online' ? 'Online' : 'Offline';
+
+                tr.innerHTML = `
+                    <td>${host.hostname || 'N/A'}</td>
+                    <td>${host.host}</td>
+                    <td><span class="badge bg-${statusClass} status-badge">${statusText}</span></td>
+                    <td>${host.os || 'N/A'}</td>
+                    <td>${host.cpu_cores || 'N/A'}</td>
+                    <td>${host.memory_total || 'N/A'}</td>
+                    <td>${host.disk_total || 'N/A'}</td>
+                    <td>${host.uptime || 'N/A'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning btn-circle edit-host-btn" data-ip="${host.host}" data-hostname="${host.hostname || ''}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger btn-circle delete-host-btn" data-ip="${host.host}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+
+                hostsTableBody.appendChild(tr);
+            });
+
+            // Add event listeners to edit and delete buttons
+            document.querySelectorAll('.edit-host-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const ip = btn.getAttribute('data-ip');
+                    const hostname = btn.getAttribute('data-hostname');
+
+                    document.getElementById('edit-host-original-ip').value = ip;
+                    document.getElementById('edit-ip').value = ip;
+                    document.getElementById('edit-hostname').value = hostname;
+
+                    editHostModal.show();
+                });
+            });
+
+            document.querySelectorAll('.delete-host-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const ip = btn.getAttribute('data-ip');
+                    if (confirm(`Are you sure you want to delete host ${ip}?`)) {
+                        await deleteHost(ip);
+                    }
+                });
+            });
+        }
+
+        // Update host cards
+        function updateHostCards(hosts) {
+            hostCardsContainer.innerHTML = '';
+
+            hosts.forEach(host => {
+                const col = document.createElement('div');
+                col.className = 'col-md-4 mb-4';
+
+                const statusClass = host.status === 'online' ? 'success' : 'danger';
+                const statusText = host.status === 'online' ? 'Online' : 'Offline';
+
+                col.innerHTML = `
+                    <div class="card host-card">
+                        <div class="card-header bg-${statusClass} text-white">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">${host.hostname || 'Unknown Host'}</h5>
+                                <span class="badge bg-light text-dark">${host.host}</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="system-info-item">
+                                <span class="system-info-label">Status:</span>
+                                <span class="badge bg-${statusClass} status-badge">${statusText}</span>
+                            </div>
+                            <div class="system-info-item">
+                                <span class="system-info-label">OS:</span>
+                                <span>${host.os || 'N/A'}</span>
+                            </div>
+                            <div class="system-info-item">
+                                <span class="system-info-label">CPU Cores:</span>
+                                <span>${host.cpu_cores || 'N/A'}</span>
+                            </div>
+                            <div class="system-info-item">
+                                <span class="system-info-label">Memory:</span>
+                                <span>${host.memory_total || 'N/A'} MB</span>
+                            </div>
+                            <div class="system-info-item">
+                                <span class="system-info-label">Disk:</span>
+                                <span>${host.disk_total || 'N/A'} GB</span>
+                            </div>
+                            <div class="system-info-item">
+                                <span class="system-info-label">Uptime:</span>
+                                <span>${host.uptime || 'N/A'} hours</span>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <div class="d-flex justify-content-between">
+                                <button class="btn btn-sm btn-warning edit-host-btn" data-ip="${host.host}" data-hostname="${host.hostname || ''}">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger delete-host-btn" data-ip="${host.host}">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                hostCardsContainer.appendChild(col);
+            });
+
+            // Add event listeners to edit and delete buttons
+            document.querySelectorAll('.edit-host-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const ip = btn.getAttribute('data-ip');
+                    const hostname = btn.getAttribute('data-hostname');
+
+                    document.getElementById('edit-host-original-ip').value = ip;
+                    document.getElementById('edit-ip').value = ip;
+                    document.getElementById('edit-hostname').value = hostname;
+
+                    editHostModal.show();
+                });
+            });
+
+            document.querySelectorAll('.delete-host-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const ip = btn.getAttribute('data-ip');
+                    if (confirm(`Are you sure you want to delete host ${ip}?`)) {
+                        await deleteHost(ip);
+                    }
+                });
+            });
+        }
+
+        // Update resource chart
+        function updateResourceChart(hosts) {
+            const labels = hosts.map(host => host.hostname || host.host);
+            const cpuData = hosts.map(host => host.cpu_cores || 0);
+            const memoryData = hosts.map(host => (host.memory_total / 1024) || 0); // Convert to GB
+            const diskData = hosts.map(host => (host.disk_total / 1024) || 0); // Convert to TB
+
+            resourceChart.data.labels = labels;
+            resourceChart.data.datasets[0].data = cpuData;
+            resourceChart.data.datasets[1].data = memoryData;
+            resourceChart.data.datasets[2].data = diskData;
+            resourceChart.update();
+        }
+
+        // Add a new host
+        async function addHost() {
+            const hostname = document.getElementById('hostname').value;
+            const ip = document.getElementById('ip').value;
+            const username = document.getElementById('username').value;
+
+            if (!hostname || !ip) {
+                alert('Hostname and IP address are required');
+                return;
+            }
+
+            showLoading();
+            try {
+                const response = await fetch('/api/hosts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ hostname, ip, username })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    addHostModal.hide();
+                    document.getElementById('add-host-form').reset();
+                    loadDashboardData();
+                } else {
+                    alert(`Failed to add host: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error adding host:', error);
+                alert('An error occurred while adding the host. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Update a host
+        async function updateHost() {
+            const originalIp = document.getElementById('edit-host-original-ip').value;
+            const hostname = document.getElementById('edit-hostname').value;
+            const ip = document.getElementById('edit-ip').value;
+            const username = document.getElementById('edit-username').value;
+
+            if (!hostname || !ip) {
+                alert('Hostname and IP address are required');
+                return;
+            }
+
+            showLoading();
+            try {
+                const response = await fetch(`/api/hosts/${originalIp}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ hostname, ip, username })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    editHostModal.hide();
+                    loadDashboardData();
+                } else {
+                    alert(`Failed to update host: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error updating host:', error);
+                alert('An error occurred while updating the host. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Delete a host
+        async function deleteHost(ip) {
+            showLoading();
+            try {
+                const response = await fetch(`/api/hosts/${ip}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loadDashboardData();
+                } else {
+                    alert(`Failed to delete host: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Error deleting host:', error);
+                alert('An error occurred while deleting the host. Please try again.');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Show loading overlay
+        function showLoading() {
+            loadingOverlay.style.display = 'flex';
+        }
+
+        // Hide loading overlay
+        function hideLoading() {
+            loadingOverlay.style.display = 'none';
+        }
+    </script>
+</body>
+
+</html>
