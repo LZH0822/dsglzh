@@ -115,7 +115,7 @@ If Ansible can't connect to hosts:
    ```
 3. Test Ansible connection manually:
    ```
-   docker exec -it docker-ansible-dashboard_ansible_1 ansible all -m ping
+   docker exec -it docker-ansible-dashboard_ansible_1 ansible all -m ping a
    ```
 
 ## License
